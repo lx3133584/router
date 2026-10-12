@@ -1958,6 +1958,127 @@ describe('findRouteMatch', () => {
         expect(result?.rawParams).toEqual({ bar: 'value' })
       }
     })
+    it('pathless layout child without params.parse does not overwrite parent params.parse or priority', () => {
+      const tree = {
+        id: '__root__',
+        isRoot: true,
+        fullPath: '/',
+        path: '/',
+        children: [
+          {
+            id: '/$postId',
+            fullPath: '/$postId',
+            path: '$postId',
+            options: {
+              params: {
+                parse: ({ postId }: Record<string, string | undefined>) =>
+                  postId && /^\d+$/.test(postId) ? { postId } : false,
+                priority: 10,
+              },
+            },
+            children: [
+              {
+                id: '/$postId/_layout',
+                fullPath: '/$postId',
+                options: {},
+                children: [
+                  {
+                    id: '/$postId/_layout/details',
+                    fullPath: '/$postId/details',
+                    path: 'details',
+                    options: {},
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      }
+      const { processedTree } = processRouteTree(tree)
+      // When postId is digits, it matches
+      expect(findRouteMatch('/123', processedTree)?.route.id).toBe('/$postId')
+      expect(findRouteMatch('/123/details', processedTree)?.route.id).toBe(
+        '/$postId/_layout/details',
+      )
+
+      // When postId is non-digits, parent parse returns false -> should NOT match
+      expect(findRouteMatch('/abc', processedTree)).toBeNull()
+      expect(findRouteMatch('/abc/details', processedTree)).toBeNull()
+    })
+    it('code-based pathless layout child with its own params.parse creates a pathless node without clobbering parent', () => {
+      const tree = {
+        id: '__root__',
+        isRoot: true,
+        fullPath: '/',
+        path: '/',
+        children: [
+          {
+            id: '/$postId',
+            fullPath: '/$postId',
+            path: '$postId',
+            options: {
+              params: {
+                parse: ({ postId }: Record<string, string | undefined>) =>
+                  postId && /^\d+$/.test(postId) ? { postId } : false,
+                priority: 10,
+              },
+            },
+            children: [
+              {
+                id: '/$postId/layout',
+                fullPath: '/$postId',
+                options: {
+                  params: {
+                    parse: ({ postId }: Record<string, string | undefined>) =>
+                      postId && Number(postId) > 100 ? { postId } : false,
+                    priority: 5,
+                  },
+                },
+                children: [
+                  {
+                    id: '/$postId/layout/details',
+                    fullPath: '/$postId/details',
+                    path: 'details',
+                    options: {},
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      }
+      const { processedTree } = processRouteTree(tree)
+      // When postId is digits and > 100, matches
+      expect(findRouteMatch('/123/details', processedTree)?.route.id).toBe(
+        '/$postId/layout/details',
+      )
+
+      // When postId is digits but <= 100, child parse rejects -> null
+      expect(findRouteMatch('/50/details', processedTree)).toBeNull()
+
+      // When postId is non-digits, parent parse rejects -> null
+      expect(findRouteMatch('/abc/details', processedTree)).toBeNull()
+    })
+    it('root route preserves params.parse and priority on root segment node', () => {
+      const parseRoot = vi.fn(
+        (params: Record<string, string | undefined>) => params,
+      )
+      const tree = {
+        id: '__root__',
+        isRoot: true,
+        fullPath: '/',
+        path: '/',
+        options: {
+          params: {
+            parse: parseRoot,
+            priority: 42,
+          },
+        },
+      }
+      const { processedTree } = processRouteTree(tree)
+      expect(processedTree.segmentTree.parse).toBe(parseRoot)
+      expect(processedTree.segmentTree.priority).toBe(42)
+    })
   })
 })
 

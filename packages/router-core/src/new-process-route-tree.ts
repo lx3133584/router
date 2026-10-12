@@ -122,6 +122,7 @@ export function parseSegments<TRouteLike extends RouteLike>(
   parentInterpolation?: RouteInterpolation,
 ): RouteInterpolation | ParsedRoute<TRouteLike> {
   let cursor = start
+  const startNode = node
   const path = route.fullPath ?? route.from
   const options = route.options
   const length = path.length
@@ -266,8 +267,9 @@ export function parseSegments<TRouteLike extends RouteLike>(
     parseParams &&
     route.children &&
     !route.isRoot &&
-    route.id &&
-    route.id.charCodeAt(route.id.lastIndexOf('/') + 1) === 95 /* '_' */
+    (node === startNode ||
+      (route.id &&
+        route.id.charCodeAt(route.id.lastIndexOf('/') + 1) === 95)) /* '_' */
   ) {
     const pathlessNode = createSegmentNode(node, SEGMENT_TYPE_PATHLESS)
     ;(node.pathless ??= []).push(pathlessNode)
@@ -282,13 +284,15 @@ export function parseSegments<TRouteLike extends RouteLike>(
     node = indexNode
   }
 
-  node.parse = parseParams ?? null
-  node.priority = options?.params?.priority ?? 0
-  // A shared candidate keeps the original names of its first terminal route.
-  if (!node.route) {
-    node.data = segmentData
-    if (isLeaf) {
-      node.route = route
+  if (node !== startNode || route.isRoot) {
+    node.parse = parseParams ?? null
+    node.priority = options?.params?.priority ?? 0
+    // A shared candidate keeps the original names of its first terminal route.
+    if (!node.route) {
+      node.data = segmentData
+      if (isLeaf) {
+        node.route = route
+      }
     }
   }
   return [node, cursor, segmentData]
