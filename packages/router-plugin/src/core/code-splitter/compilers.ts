@@ -1009,6 +1009,23 @@ export function compileCodeSplitVirtualRoute(
             originalIdentName = splitNode.name
           }
 
+          if (
+            originalIdentName &&
+            opts.sharedBindings?.has(originalIdentName)
+          ) {
+            splitMeta.shouldRemoveNode = false
+            splitMeta.localExporterIdent = originalIdentName
+            programPath.pushContainer('body', [
+              t.exportNamedDeclaration(null, [
+                t.exportSpecifier(
+                  t.identifier(splitMeta.localExporterIdent),
+                  t.identifier(splitMeta.exporterIdent),
+                ),
+              ]),
+            ])
+            return
+          }
+
           while (t.isIdentifier(splitNode)) {
             const binding = programPath.scope.getBinding(splitNode.name)
             splitNode = binding?.path.node

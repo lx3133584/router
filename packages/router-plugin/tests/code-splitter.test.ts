@@ -1113,4 +1113,88 @@ export const Route = createFileRoute('/')({
       },
     )
   })
+
+  describe('split target identifier that is also a shared binding (#8715)', () => {
+    const code = `
+import { createFileRoute } from '@tanstack/react-router'
+
+export const Route = createFileRoute('/posts/$id')({
+  component: PostRoute,
+  notFoundComponent: PostNotFound,
+  errorComponent: PostError,
+})
+
+function PostNotFound() {
+  return <p>Not found</p>
+}
+
+function PostError() {
+  return <p>Error</p>
+}
+
+function PostRoute() {
+  const post = usePost()
+  if (!post) return <PostNotFound />
+  if (post.error) return <PostError />
+  return <p>{post.title}</p>
+}
+`
+    const filename = 'posts.$id.tsx'
+    const codeSplitGroupings = defaultCodeSplitGroupings
+
+    it('exports the shared identifier directly without emitting an undeclared Split... binding', () => {
+      const sharedBindings = computeSharedBindings({
+        code,
+        filename,
+        codeSplitGroupings,
+      })
+
+      expect(sharedBindings.has('PostNotFound')).toBe(true)
+      expect(sharedBindings.has('PostError')).toBe(true)
+
+      const resultNotFound = compileCodeSplitVirtualRoute({
+        code,
+        filename: `${filename}?tsr-split=notFoundComponent`,
+        splitTargets: ['notFoundComponent'],
+        sharedBindings,
+      })
+
+      expect(resultNotFound.code).toContain(
+        'export { PostNotFound as notFoundComponent }',
+      )
+      expect(resultNotFound.code).not.toContain('SplitNotFoundComponent')
+
+      const resultError = compileCodeSplitVirtualRoute({
+        code,
+        filename: `${filename}?tsr-split=errorComponent`,
+        splitTargets: ['errorComponent'],
+        sharedBindings,
+      })
+
+      expect(resultError.code).toContain(
+        'export { PostError as errorComponent }',
+      )
+      expect(resultError.code).not.toContain('SplitErrorComponent')
+    })
+
+    it('works when babel traverse scope is fresh without stale cached bindings', () => {
+      const sharedBindings = computeSharedBindings({
+        code,
+        filename,
+        codeSplitGroupings,
+      })
+
+      const result = compileCodeSplitVirtualRoute({
+        code,
+        filename: `${filename}?tsr-split=notFoundComponent`,
+        splitTargets: ['notFoundComponent'],
+        sharedBindings,
+      })
+
+      expect(result.code).toContain(
+        'export { PostNotFound as notFoundComponent }',
+      )
+      expect(result.code).not.toContain('SplitNotFoundComponent')
+    })
+  })
 })
