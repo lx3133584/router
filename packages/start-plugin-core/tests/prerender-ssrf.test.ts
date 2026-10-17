@@ -243,4 +243,27 @@ describe('prerender public sinks', () => {
 
     expect(request).not.toHaveBeenCalled()
   })
+
+  it('preserves binary content when prerendering binary server routes (e.g. images)', async () => {
+    vi.mocked(fsp.writeFile).mockClear()
+    const binaryData = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46])
+    const request = vi.fn(async () => {
+      return new Response(binaryData, {
+        status: 200,
+        headers: { 'content-type': 'image/jpeg' },
+      })
+    })
+
+    const startConfig = makeStartConfig('/og-image.jpg')
+    await prerender({
+      startConfig,
+      handler: { getClientOutputDirectory: () => '/client', request },
+    })
+
+    expect(request).toHaveBeenCalledOnce()
+    expect(fsp.writeFile).toHaveBeenCalledExactlyOnceWith(
+      '/client/og-image.jpg',
+      binaryData,
+    )
+  })
 })

@@ -190,7 +190,24 @@ export async function prerender({
             routerBasePath,
           )
 
-          const html = await res.text()
+          const isText =
+            isImplicitHTML ||
+            contentType.includes('html') ||
+            contentType.startsWith('text/') ||
+            contentType.includes('xml') ||
+            contentType.includes('json') ||
+            contentType.includes('javascript')
+
+          let body: string | Buffer
+          let html = ''
+
+          if (isText) {
+            html = await res.text()
+            body = html
+          } else {
+            body = Buffer.from(await res.arrayBuffer())
+          }
+
           const resolvedOutputDir = path.resolve(outputDir)
           const filepath = path.resolve(outputDir, filename.replace(/^\/+/, ''))
           const outputPrefix = resolvedOutputDir.endsWith(path.sep)
@@ -209,7 +226,7 @@ export async function prerender({
             recursive: true,
           })
 
-          await fsp.writeFile(filepath, html)
+          await fsp.writeFile(filepath, body)
 
           prerendered.add(page.path)
 
@@ -219,7 +236,7 @@ export async function prerender({
             Object.assign(page, newPage)
           }
 
-          if (prerenderOptions.crawlLinks ?? true) {
+          if (html && (prerenderOptions.crawlLinks ?? true)) {
             const links = extractLinks(html)
             for (const link of links) {
               addCrawlPageTask({ path: link, fromCrawl: true })
